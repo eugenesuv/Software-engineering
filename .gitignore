@@ -1,0 +1,6 @@
+# Local tooling
+/tools/structurizr-cli/
+/bin/
+
+# macOS
+.DS_Store
