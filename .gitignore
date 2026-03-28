@@ -1,6 +1,11 @@
 # Local tooling
 /tools/structurizr-cli/
 /bin/
+/build/
+/data/
+*.db
+*.db-shm
+*.db-wal
 
 # macOS
 .DS_Store

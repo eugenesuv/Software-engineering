@@ -1,0 +1,9 @@
+.git
+.DS_Store
+build
+bin
+data
+tools/structurizr-cli
+*.db
+*.db-shm
+*.db-wal

@@ -1,0 +1,592 @@
+openapi: 3.0.3
+info:
+  title: Car Rental Management API
+  version: 1.0.0
+  description: REST API for homework variant 21 implemented with POCO C++ Libraries.
+servers:
+  - url: http://localhost:8080
+tags:
+  - name: health
+  - name: auth
+  - name: users
+  - name: fleet
+  - name: rentals
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error, message, details]
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        details:
+          type: string
+    RegisterUserRequest:
+      type: object
+      required: [login, password, firstName, lastName, email, phone, driverLicenseNumber]
+      properties:
+        login:
+          type: string
+          example: alice
+        password:
+          type: string
+          example: Secret123!
+        firstName:
+          type: string
+          example: Alice
+        lastName:
+          type: string
+          example: Driver
+        email:
+          type: string
+          format: email
+          example: alice@example.com
+        phone:
+          type: string
+          example: "+79001234567"
+        driverLicenseNumber:
+          type: string
+          example: DL-ALICE-001
+    User:
+      type: object
+      required: [id, login, firstName, lastName, email, phone, driverLicenseNumber, role, createdAt]
+      properties:
+        id:
+          type: string
+        login:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+        driverLicenseNumber:
+          type: string
+        role:
+          type: string
+          enum: [CUSTOMER, FLEET_MANAGER]
+        createdAt:
+          type: string
+          format: date-time
+    LoginRequest:
+      type: object
+      required: [login, password]
+      properties:
+        login:
+          type: string
+        password:
+          type: string
+    LoginResponse:
+      type: object
+      required: [accessToken, tokenType, expiresIn, user]
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          example: Bearer
+        expiresIn:
+          type: integer
+          example: 3600
+        user:
+          $ref: '#/components/schemas/User'
+    CreateCarRequest:
+      type: object
+      required: [vin, brand, model, class, pricePerDay]
+      properties:
+        vin:
+          type: string
+          example: CAR00000000000001
+        brand:
+          type: string
+          example: Toyota
+        model:
+          type: string
+          example: Corolla
+        class:
+          type: string
+          enum: [ECONOMY, COMFORT, BUSINESS, SUV, LUXURY]
+        pricePerDay:
+          type: number
+          format: double
+          example: 150
+    Car:
+      type: object
+      required: [id, vin, brand, model, class, status, pricePerDay, createdAt]
+      properties:
+        id:
+          type: string
+        vin:
+          type: string
+        brand:
+          type: string
+        model:
+          type: string
+        class:
+          type: string
+          enum: [ECONOMY, COMFORT, BUSINESS, SUV, LUXURY]
+        status:
+          type: string
+          enum: [AVAILABLE, RESERVED, IN_RENT, MAINTENANCE]
+        pricePerDay:
+          type: number
+          format: double
+        createdAt:
+          type: string
+          format: date-time
+    CreateRentalRequest:
+      type: object
+      required: [userId, carId, startAt, endAt]
+      properties:
+        userId:
+          type: string
+        carId:
+          type: string
+        startAt:
+          type: string
+          format: date-time
+          example: 2030-04-01T09:00:00Z
+        endAt:
+          type: string
+          format: date-time
+          example: 2030-04-04T09:00:00Z
+    Rental:
+      type: object
+      required: [id, userId, carId, startAt, endAt, status, priceTotal, createdAt, closedAt, paymentReference]
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        carId:
+          type: string
+        startAt:
+          type: string
+          format: date-time
+        endAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [ACTIVE, COMPLETED, CANCELLED]
+        priceTotal:
+          type: number
+          format: double
+        createdAt:
+          type: string
+          format: date-time
+        closedAt:
+          type: string
+        paymentReference:
+          type: string
+paths:
+  /health:
+    get:
+      tags: [health]
+      summary: Health check
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+  /users:
+    post:
+      tags: [users]
+      summary: Register new customer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterUserRequest'
+      responses:
+        '201':
+          description: Customer registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Duplicate login
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Login and get JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: JWT issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /users/by-login:
+    get:
+      tags: [users]
+      security:
+        - bearerAuth: []
+      summary: Find user by login
+      parameters:
+        - in: query
+          name: login
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: User found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /users/search:
+    get:
+      tags: [users]
+      security:
+        - bearerAuth: []
+      summary: Search users by first name / last name mask
+      parameters:
+        - in: query
+          name: nameMask
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: surnameMask
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Matching users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /cars:
+    post:
+      tags: [fleet]
+      security:
+        - bearerAuth: []
+      summary: Add car to fleet
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCarRequest'
+      responses:
+        '201':
+          description: Car added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Car'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Fleet manager role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Duplicate VIN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /cars/available:
+    get:
+      tags: [fleet]
+      summary: List available cars
+      responses:
+        '200':
+          description: Available cars
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Car'
+  /cars/search:
+    get:
+      tags: [fleet]
+      summary: Search cars by class
+      parameters:
+        - in: query
+          name: class
+          required: true
+          schema:
+            type: string
+            enum: [ECONOMY, COMFORT, BUSINESS, SUV, LUXURY]
+      responses:
+        '200':
+          description: Matching cars
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Car'
+        '400':
+          description: Invalid class
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /rentals:
+    post:
+      tags: [rentals]
+      security:
+        - bearerAuth: []
+      summary: Create rental
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRentalRequest'
+      responses:
+        '201':
+          description: Rental created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rental'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Customer role required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User or car not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Business conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /users/{userId}/rentals/active:
+    get:
+      tags: [rentals]
+      security:
+        - bearerAuth: []
+      summary: Get active rentals of a user
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Active rentals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Rental'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /users/{userId}/rentals/history:
+    get:
+      tags: [rentals]
+      security:
+        - bearerAuth: []
+      summary: Get rental history of a user
+      parameters:
+        - in: path
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Historical rentals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Rental'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /rentals/{rentalId}/complete:
+    post:
+      tags: [rentals]
+      security:
+        - bearerAuth: []
+      summary: Complete active rental
+      parameters:
+        - in: path
+          name: rentalId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Rental completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Rental'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Access denied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Rental not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Rental already completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
