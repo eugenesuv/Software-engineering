@@ -11,15 +11,27 @@ option(ENABLE_COVERAGE "Enable coverage flags for GCC/Clang builds" OFF)
 
 include(CTest)
 
-find_package(SQLite3 REQUIRED)
 find_package(Poco CONFIG REQUIRED COMPONENTS Foundation JSON Net Util)
+find_package(libpqxx CONFIG QUIET)
 
-if(TARGET SQLite3::SQLite3)
-    set(SQLITE_TARGET SQLite3::SQLite3)
-elseif(TARGET SQLite::SQLite3)
-    set(SQLITE_TARGET SQLite::SQLite3)
+if(TARGET libpqxx::pqxx)
+    set(LIBPQXX_TARGET libpqxx::pqxx)
 else()
-    message(FATAL_ERROR "Could not find a usable SQLite CMake target.")
+    find_path(LIBPQXX_INCLUDE_DIR pqxx/pqxx)
+    find_library(LIBPQXX_LIBRARY NAMES pqxx libpqxx)
+
+    if(NOT LIBPQXX_INCLUDE_DIR OR NOT LIBPQXX_LIBRARY)
+        message(FATAL_ERROR "Could not find libpqxx. Install libpqxx development package or provide a CMake package config.")
+    endif()
+
+    add_library(libpqxx_fallback UNKNOWN IMPORTED)
+    set_target_properties(
+        libpqxx_fallback
+        PROPERTIES
+            IMPORTED_LOCATION "${LIBPQXX_LIBRARY}"
+            INTERFACE_INCLUDE_DIRECTORIES "${LIBPQXX_INCLUDE_DIR}"
+    )
+    set(LIBPQXX_TARGET libpqxx_fallback)
 endif()
 
 if(BUILD_TESTING)
@@ -40,6 +52,7 @@ add_library(car_rental_lib
     src/database.cpp
     src/security.cpp
     src/services.cpp
+    src/stores_postgres.cpp
     src/server.cpp
     src/utils.cpp
 )
@@ -52,7 +65,7 @@ target_link_libraries(
         Poco::JSON
         Poco::Net
         Poco::Util
-        ${SQLITE_TARGET}
+        ${LIBPQXX_TARGET}
 )
 
 target_compile_features(car_rental_lib PUBLIC cxx_std_17)

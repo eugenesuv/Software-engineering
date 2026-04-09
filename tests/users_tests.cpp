@@ -25,7 +25,7 @@ TEST_SUITE("users")
         TestServer server;
         const auto customer = server.createCustomer();
 
-        CHECK(server.scalarInt("SELECT COUNT(*) FROM users") == 2);
+        CHECK(server.scalarInt("SELECT COUNT(*) FROM user_service.users") == 2);
 
         const HttpResult response = server.request(
             "GET",

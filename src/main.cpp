@@ -6,6 +6,7 @@
 #include <Poco/Util/OptionSet.h>
 #include <Poco/Util/ServerApplication.h>
 
+#include <cstdlib>
 #include <iostream>
 
 namespace {
@@ -42,11 +43,11 @@ protected:
                               .argument("port")
                               .callback(Poco::Util::OptionCallback<ApiServerApp>(this, &ApiServerApp::handlePort)));
 
-        options.addOption(Poco::Util::Option("db-path", "", "Path to SQLite database file.")
+        options.addOption(Poco::Util::Option("db-url", "", "PostgreSQL connection string.")
                               .required(false)
                               .repeatable(false)
-                              .argument("path")
-                              .callback(Poco::Util::OptionCallback<ApiServerApp>(this, &ApiServerApp::handleDatabasePath)));
+                              .argument("url")
+                              .callback(Poco::Util::OptionCallback<ApiServerApp>(this, &ApiServerApp::handleDatabaseUrl)));
 
         options.addOption(Poco::Util::Option("jwt-secret", "", "Secret used to sign JWT tokens.")
                               .required(false)
@@ -108,9 +109,9 @@ private:
         config_.port = std::stoi(value);
     }
 
-    void handleDatabasePath(const std::string&, const std::string& value)
+    void handleDatabaseUrl(const std::string&, const std::string& value)
     {
-        config_.databasePath = value;
+        config_.databaseUrl = value;
     }
 
     void handleJwtSecret(const std::string&, const std::string& value)
@@ -134,7 +135,15 @@ private:
     }
 
     bool helpRequested_{false};
-    car_rental::ServerConfig config_{};
+    car_rental::ServerConfig config_ = [] {
+        car_rental::ServerConfig config;
+        if (const char* databaseUrl = std::getenv("DATABASE_URL"))
+        {
+            if (*databaseUrl != '\0')
+                config.databaseUrl = databaseUrl;
+        }
+        return config;
+    }();
 };
 
 } // namespace

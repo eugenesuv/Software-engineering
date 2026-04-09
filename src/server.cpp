@@ -408,15 +408,25 @@ private:
 
 ApiServer::ApiServer(ServerConfig config)
     : config_(std::move(config))
-    , database_(std::make_unique<Database>(config_.databasePath))
+    , database_(std::make_unique<Database>(config_.databaseUrl))
+    , userStore_(makePostgresUserStore(*database_))
+    , fleetStore_(makePostgresFleetStore(*database_))
+    , rentalStore_(makePostgresRentalStore(*database_))
+    , rentalWorkflowCoordinator_(makePostgresRentalWorkflowCoordinator(*database_))
     , passwordHasher_(std::make_unique<PasswordHasher>())
     , jwtService_(std::make_unique<JwtService>(config_.jwtSecret, config_.jwtTtlSeconds))
     , licenseVerifier_(std::make_shared<DeterministicLicenseVerifier>())
     , paymentGateway_(std::make_shared<DeterministicPaymentGateway>())
-    , userService_(std::make_unique<UserService>(*database_, *passwordHasher_))
+    , userService_(std::make_unique<UserService>(*userStore_, *passwordHasher_))
     , authService_(std::make_unique<AuthService>(*userService_, *passwordHasher_, *jwtService_))
-    , fleetService_(std::make_unique<FleetService>(*database_))
-    , rentalService_(std::make_unique<RentalService>(*database_, *userService_, *fleetService_, *licenseVerifier_, *paymentGateway_))
+    , fleetService_(std::make_unique<FleetService>(*fleetStore_))
+    , rentalService_(std::make_unique<RentalService>(
+          *rentalStore_,
+          *rentalWorkflowCoordinator_,
+          *userService_,
+          *fleetService_,
+          *licenseVerifier_,
+          *paymentGateway_))
 {
 }
 
@@ -427,7 +437,7 @@ ApiServer::~ApiServer()
 
 void ApiServer::start()
 {
-    database_->initializeSchema();
+    database_->verifyConnection();
     userService_->seedManager(config_.managerLogin, config_.managerPassword);
 
     Poco::Net::ServerSocket socket(Poco::Net::SocketAddress(config_.host, config_.port));

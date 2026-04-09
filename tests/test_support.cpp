@@ -6,20 +6,72 @@
 #include <Poco/Net/HTTPRequest.h>
 #include <Poco/Net/HTTPResponse.h>
 #include <Poco/StreamCopier.h>
+#include <Poco/URI.h>
+
+#include <pqxx/pqxx>
 
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
 #include <stdexcept>
 #include <thread>
 
-#include <sqlite3.h>
-
 namespace {
 
 std::atomic<int> gSequence{0};
+
+std::string adminDatabaseUrl()
+{
+    if (const char* value = std::getenv("CAR_RENTAL_TEST_ADMIN_URL"))
+    {
+        if (*value != '\0')
+            return value;
+    }
+    return "postgresql://postgres:postgres@127.0.0.1:5432/postgres";
+}
+
+std::string databaseUrlFor(const std::string& adminUrl, const std::string& databaseName)
+{
+    Poco::URI uri(adminUrl);
+    uri.setPath("/" + databaseName);
+    return uri.toString();
+}
+
+std::string readTextFile(const std::filesystem::path& path)
+{
+    std::ifstream input(path);
+    if (!input)
+        throw std::runtime_error("Failed to open file: " + path.string());
+
+    std::ostringstream buffer;
+    buffer << input.rdbuf();
+    return buffer.str();
+}
+
+void recreateDatabase(const std::string& adminUrl, const std::string& databaseName)
+{
+    pqxx::connection connection(adminUrl);
+    pqxx::nontransaction tx(connection);
+    tx.exec0("DROP DATABASE IF EXISTS " + tx.quote_name(databaseName) + " WITH (FORCE)");
+    tx.exec0("CREATE DATABASE " + tx.quote_name(databaseName));
+}
+
+void dropDatabase(const std::string& adminUrl, const std::string& databaseName)
+{
+    pqxx::connection connection(adminUrl);
+    pqxx::nontransaction tx(connection);
+    tx.exec0("DROP DATABASE IF EXISTS " + tx.quote_name(databaseName) + " WITH (FORCE)");
+}
+
+void applySqlScript(const std::string& databaseUrl, const std::string& sql)
+{
+    pqxx::connection connection(databaseUrl);
+    pqxx::nontransaction tx(connection);
+    tx.exec(sql);
+}
 
 std::string buildCustomerPayload(const std::string& login, const std::string& password)
 {
@@ -56,15 +108,20 @@ std::string buildCarPayload(const std::string& vin, car_rental::CarClass carClas
 TestServer::TestServer()
 {
     const int sequence = nextSequence();
-    const auto tempDir = std::filesystem::temp_directory_path();
+    const std::filesystem::path root = std::filesystem::path(__FILE__).parent_path().parent_path();
 
     config_.host = "127.0.0.1";
     config_.port = 0;
-    config_.databasePath = (tempDir / ("car_rental_test_" + std::to_string(sequence) + ".db")).string();
+    adminDatabaseUrl_ = adminDatabaseUrl();
+    databaseName_ = "car_rental_test_" + std::to_string(sequence);
+    config_.databaseUrl = databaseUrlFor(adminDatabaseUrl_, databaseName_);
     config_.jwtSecret = "test-secret";
     config_.jwtTtlSeconds = 3600;
     config_.managerLogin = "manager";
     config_.managerPassword = "Manager123!";
+
+    recreateDatabase(adminDatabaseUrl_, databaseName_);
+    applySqlScript(config_.databaseUrl, readTextFile(root / "schema.sql"));
 
     server_ = std::make_unique<car_rental::ApiServer>(config_);
     server_->start();
@@ -76,8 +133,8 @@ TestServer::~TestServer()
 {
     if (server_)
         server_->stop();
-    std::error_code ignored;
-    std::filesystem::remove(config_.databasePath, ignored);
+    if (!databaseName_.empty() && !adminDatabaseUrl_.empty())
+        dropDatabase(adminDatabaseUrl_, databaseName_);
 }
 
 HttpResult TestServer::request(const std::string& method, const std::string& path, const std::string& body, const std::string& token) const
@@ -164,50 +221,22 @@ std::string TestServer::makeTokenFor(const std::string& userId, car_rental::Role
 
 int TestServer::scalarInt(const std::string& sql) const
 {
-    sqlite3* db = nullptr;
-    if (sqlite3_open(config_.databasePath.c_str(), &db) != SQLITE_OK)
-        throw std::runtime_error("Failed to open sqlite database.");
-
-    sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(db, sql.c_str(), static_cast<int>(sql.size()), &stmt, nullptr) != SQLITE_OK)
-    {
-        sqlite3_close(db);
-        throw std::runtime_error("Failed to prepare sqlite statement.");
-    }
-
-    int result = 0;
-    if (sqlite3_step(stmt) == SQLITE_ROW)
-        result = sqlite3_column_int(stmt, 0);
-
-    sqlite3_finalize(stmt);
-    sqlite3_close(db);
-    return result;
+    pqxx::connection connection(config_.databaseUrl);
+    pqxx::read_transaction tx(connection);
+    const pqxx::result result = tx.exec(sql);
+    if (result.empty() || result[0].empty())
+        return 0;
+    return result[0][0].as<int>();
 }
 
 std::string TestServer::scalarText(const std::string& sql) const
 {
-    sqlite3* db = nullptr;
-    if (sqlite3_open(config_.databasePath.c_str(), &db) != SQLITE_OK)
-        throw std::runtime_error("Failed to open sqlite database.");
-
-    sqlite3_stmt* stmt = nullptr;
-    if (sqlite3_prepare_v2(db, sql.c_str(), static_cast<int>(sql.size()), &stmt, nullptr) != SQLITE_OK)
-    {
-        sqlite3_close(db);
-        throw std::runtime_error("Failed to prepare sqlite statement.");
-    }
-
-    std::string result;
-    if (sqlite3_step(stmt) == SQLITE_ROW)
-    {
-        const auto* raw = sqlite3_column_text(stmt, 0);
-        if (raw != nullptr)
-            result = reinterpret_cast<const char*>(raw);
-    }
-
-    sqlite3_finalize(stmt);
-    sqlite3_close(db);
-    return result;
+    pqxx::connection connection(config_.databaseUrl);
+    pqxx::read_transaction tx(connection);
+    const pqxx::result result = tx.exec(sql);
+    if (result.empty() || result[0].empty() || result[0][0].is_null())
+        return {};
+    return result[0][0].c_str();
 }
 
 std::string TestServer::uniqueLogin(const std::string& prefix) const

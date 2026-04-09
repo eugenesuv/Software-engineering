@@ -1,8 +1,8 @@
 #pragma once
 
-#include "car_rental/database.h"
 #include "car_rental/models.h"
 #include "car_rental/security.h"
+#include "car_rental/stores.h"
 
 #include <memory>
 #include <string>
@@ -45,7 +45,7 @@ public:
 class UserService
 {
 public:
-    UserService(const Database& database, const PasswordHasher& passwordHasher);
+    UserService(UserStore& store, const PasswordHasher& passwordHasher);
 
     UserDto registerCustomer(const RegisterUserRequest& request) const;
     UserDto seedManager(const std::string& login, const std::string& password) const;
@@ -55,7 +55,7 @@ public:
     std::vector<UserDto> search(const std::string& nameMask, const std::string& surnameMask) const;
 
 private:
-    const Database& database_;
+    UserStore& store_;
     const PasswordHasher& passwordHasher_;
 };
 
@@ -76,7 +76,7 @@ private:
 class FleetService
 {
 public:
-    explicit FleetService(const Database& database);
+    explicit FleetService(FleetStore& store);
 
     CarDto addCar(const CreateCarRequest& request) const;
     std::vector<CarDto> listAvailable() const;
@@ -85,14 +85,15 @@ public:
     void setStatus(const std::string& carId, CarStatus status) const;
 
 private:
-    const Database& database_;
+    FleetStore& store_;
 };
 
 class RentalService
 {
 public:
     RentalService(
-        const Database& database,
+        RentalStore& rentalStore,
+        RentalWorkflowCoordinator& rentalWorkflowCoordinator,
         const UserService& userService,
         FleetService& fleetService,
         const LicenseVerifier& licenseVerifier,
@@ -104,7 +105,8 @@ public:
     RentalDto completeRental(const AuthenticatedUser& principal, const std::string& rentalId) const;
 
 private:
-    const Database& database_;
+    RentalStore& rentalStore_;
+    RentalWorkflowCoordinator& rentalWorkflowCoordinator_;
     const UserService& userService_;
     FleetService& fleetService_;
     const LicenseVerifier& licenseVerifier_;

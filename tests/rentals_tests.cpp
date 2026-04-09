@@ -45,14 +45,14 @@ TEST_SUITE("rentals")
         const HttpResult active = server.request("GET", "/users/" + customer.id + "/rentals/active", "", customer.token);
         REQUIRE(active.status == 200);
         CHECK(server.parseArray(active.body)->size() == 1);
-        CHECK(server.scalarText("SELECT status FROM cars WHERE id = '" + car.id + "'") == "IN_RENT");
-        CHECK(server.scalarInt("SELECT COUNT(*) FROM outbox_events") == 1);
+        CHECK(server.scalarText("SELECT status FROM fleet_service.cars WHERE id = '" + car.id + "'::uuid") == "IN_RENT");
+        CHECK(server.scalarInt("SELECT COUNT(*) FROM rental_service.outbox_events") == 1);
 
         const HttpResult completed = server.request("POST", "/rentals/" + rentalId + "/complete", "", customer.token);
         REQUIRE(completed.status == 200);
         CHECK(server.parseObject(completed.body)->getValue<std::string>("status") == "COMPLETED");
-        CHECK(server.scalarText("SELECT status FROM cars WHERE id = '" + car.id + "'") == "AVAILABLE");
-        CHECK(server.scalarInt("SELECT COUNT(*) FROM outbox_events") == 2);
+        CHECK(server.scalarText("SELECT status FROM fleet_service.cars WHERE id = '" + car.id + "'::uuid") == "AVAILABLE");
+        CHECK(server.scalarInt("SELECT COUNT(*) FROM rental_service.outbox_events") == 2);
 
         const HttpResult activeAfter = server.request("GET", "/users/" + customer.id + "/rentals/active", "", customer.token);
         CHECK(server.parseArray(activeAfter.body)->size() == 0);
@@ -67,7 +67,7 @@ TEST_SUITE("rentals")
         TestServer server;
         const auto customer = server.createCustomer();
 
-        const HttpResult response = server.request("POST", "/rentals", rentalBody(customer.id, "missing-car-id"), customer.token);
+        const HttpResult response = server.request("POST", "/rentals", rentalBody(customer.id, "00000000-0000-0000-0000-000000000404"), customer.token);
         CHECK(response.status == 404);
     }
 
@@ -75,7 +75,7 @@ TEST_SUITE("rentals")
     {
         TestServer server;
         const auto car = server.createCar();
-        const std::string ghostId = "ghost-user-id";
+        const std::string ghostId = "00000000-0000-0000-0000-000000000405";
         const std::string token = server.makeTokenFor(ghostId, car_rental::Role::Customer, "ghost");
 
         const HttpResult response = server.request("POST", "/rentals", rentalBody(ghostId, car.id), token);

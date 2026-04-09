@@ -59,5 +59,7 @@ private:
     static int nextSequence();
 
     car_rental::ServerConfig config_;
+    std::string databaseName_;
+    std::string adminDatabaseUrl_;
     std::unique_ptr<car_rental::ApiServer> server_;
 };

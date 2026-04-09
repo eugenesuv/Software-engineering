@@ -3,6 +3,7 @@
 #include "car_rental/database.h"
 #include "car_rental/security.h"
 #include "car_rental/services.h"
+#include "car_rental/stores.h"
 
 #include <memory>
 #include <string>
@@ -17,7 +18,7 @@ struct ServerConfig
 {
     std::string host{"127.0.0.1"};
     int port{8080};
-    std::string databasePath{"data/car_rental.db"};
+    std::string databaseUrl{"postgresql://postgres:postgres@127.0.0.1:5432/car_rental"};
     std::string jwtSecret{"dev-secret-change-me"};
     long jwtTtlSeconds{3600};
     std::string managerLogin{"manager"};
@@ -38,6 +39,10 @@ public:
 private:
     ServerConfig config_;
     std::unique_ptr<Database> database_;
+    std::unique_ptr<UserStore> userStore_;
+    std::unique_ptr<FleetStore> fleetStore_;
+    std::unique_ptr<RentalStore> rentalStore_;
+    std::unique_ptr<RentalWorkflowCoordinator> rentalWorkflowCoordinator_;
     std::unique_ptr<PasswordHasher> passwordHasher_;
     std::unique_ptr<JwtService> jwtService_;
     std::shared_ptr<LicenseVerifier> licenseVerifier_;
