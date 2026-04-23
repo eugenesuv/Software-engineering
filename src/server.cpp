@@ -22,6 +22,7 @@
 #include <Poco/URI.h>
 
 #include <memory>
+#include <stdexcept>
 #include <regex>
 #include <sstream>
 #include <utility>
@@ -36,6 +37,16 @@ struct ApiDependencies
     FleetService* fleet{nullptr};
     RentalService* rentals{nullptr};
 };
+
+StorageBackend storageBackendOrThrow(const std::string& value)
+{
+    const std::string normalized = upperCopy(trimCopy(value));
+    if (normalized == "POSTGRES")
+        return StorageBackend::Postgres;
+    if (normalized == "MONGO")
+        return StorageBackend::Mongo;
+    throw std::invalid_argument("Unsupported storage backend: " + value);
+}
 
 Poco::JSON::Object::Ptr toJson(const UserDto& user)
 {
@@ -406,13 +417,49 @@ private:
 
 } // namespace
 
+std::string toString(StorageBackend backend)
+{
+    switch (backend)
+    {
+    case StorageBackend::Postgres:
+        return "postgres";
+    case StorageBackend::Mongo:
+        return "mongo";
+    }
+    throw std::logic_error("Unknown storage backend");
+}
+
+StorageBackend storageBackendFromString(const std::string& value)
+{
+    return storageBackendOrThrow(value);
+}
+
 ApiServer::ApiServer(ServerConfig config)
     : config_(std::move(config))
-    , database_(std::make_unique<Database>(config_.databaseUrl))
-    , userStore_(makePostgresUserStore(*database_))
-    , fleetStore_(makePostgresFleetStore(*database_))
-    , rentalStore_(makePostgresRentalStore(*database_))
-    , rentalWorkflowCoordinator_(makePostgresRentalWorkflowCoordinator(*database_))
+    , postgresDatabase_(
+          config_.dataBackend == StorageBackend::Postgres
+              ? std::make_unique<PostgresDatabase>(config_.databaseUrl)
+              : nullptr)
+    , mongoDatabase_(
+          config_.dataBackend == StorageBackend::Mongo
+              ? std::make_unique<MongoDatabase>(config_.mongoUrl, config_.mongoDatabaseName)
+              : nullptr)
+    , userStore_(
+          config_.dataBackend == StorageBackend::Postgres
+              ? makePostgresUserStore(*postgresDatabase_)
+              : makeMongoUserStore(*mongoDatabase_))
+    , fleetStore_(
+          config_.dataBackend == StorageBackend::Postgres
+              ? makePostgresFleetStore(*postgresDatabase_)
+              : makeMongoFleetStore(*mongoDatabase_))
+    , rentalStore_(
+          config_.dataBackend == StorageBackend::Postgres
+              ? makePostgresRentalStore(*postgresDatabase_)
+              : makeMongoRentalStore(*mongoDatabase_))
+    , rentalWorkflowCoordinator_(
+          config_.dataBackend == StorageBackend::Postgres
+              ? makePostgresRentalWorkflowCoordinator(*postgresDatabase_)
+              : makeMongoRentalWorkflowCoordinator(*mongoDatabase_))
     , passwordHasher_(std::make_unique<PasswordHasher>())
     , jwtService_(std::make_unique<JwtService>(config_.jwtSecret, config_.jwtTtlSeconds))
     , licenseVerifier_(std::make_shared<DeterministicLicenseVerifier>())
@@ -437,7 +484,16 @@ ApiServer::~ApiServer()
 
 void ApiServer::start()
 {
-    database_->verifyConnection();
+    if (config_.dataBackend == StorageBackend::Postgres)
+    {
+        postgresDatabase_->verifyConnection();
+    }
+    else
+    {
+        mongoDatabase_->verifyConnection();
+        mongoDatabase_->ensureCollections();
+    }
+
     userService_->seedManager(config_.managerLogin, config_.managerPassword);
 
     Poco::Net::ServerSocket socket(Poco::Net::SocketAddress(config_.host, config_.port));

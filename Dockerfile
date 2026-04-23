@@ -6,6 +6,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cmake \
     curl \
     git \
+    pkg-config \
+    libmongoc-dev \
     libpq-dev \
     libpoco-dev \
     libpqxx-dev \
@@ -23,6 +25,8 @@ FROM ubuntu:24.04
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     curl \
+    libmongoc-1.0-0 \
+    libbson-1.0-0 \
     libpq5 \
     libpoco-dev \
     libpqxx-dev \
@@ -35,9 +39,13 @@ COPY schema.sql /app/schema.sql
 COPY data.sql /app/data.sql
 COPY queries.sql /app/queries.sql
 COPY optimization.md /app/optimization.md
+COPY schema_design.md /app/schema_design.md
+COPY data.js /app/data.js
+COPY queries.js /app/queries.js
+COPY validation.js /app/validation.js
 EXPOSE 8080
 
 HEALTHCHECK --interval=10s --timeout=3s --retries=5 CMD curl -fsS http://127.0.0.1:8080/health || exit 1
 
 ENTRYPOINT ["/usr/local/bin/car_rental_api"]
-CMD ["--host", "0.0.0.0", "--port", "8080", "--db-url", "postgresql://postgres:postgres@postgres:5432/car_rental", "--jwt-secret", "docker-dev-secret", "--manager-password", "Manager123!"]
+CMD ["--host", "0.0.0.0", "--port", "8080", "--data-backend", "mongo", "--mongo-url", "mongodb://mongo:27017/?replicaSet=rs0", "--mongo-db", "car_rental", "--jwt-secret", "docker-dev-secret", "--manager-password", "Manager123!"]

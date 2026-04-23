@@ -1,4 +1,4 @@
-#include "car_rental/database.h"
+#include "car_rental/postgres_database.h"
 
 #include <pqxx/pqxx>
 
@@ -7,17 +7,17 @@
 
 namespace car_rental {
 
-Database::Database(std::string connectionString)
+PostgresDatabase::PostgresDatabase(std::string connectionString)
     : connectionString_(std::move(connectionString))
 {
 }
 
-const std::string& Database::connectionString() const noexcept
+const std::string& PostgresDatabase::connectionString() const noexcept
 {
     return connectionString_;
 }
 
-std::unique_ptr<pqxx::connection> Database::connect() const
+std::unique_ptr<pqxx::connection> PostgresDatabase::connect() const
 {
     auto connection = std::make_unique<pqxx::connection>(connectionString_);
     if (!connection->is_open())
@@ -25,7 +25,7 @@ std::unique_ptr<pqxx::connection> Database::connect() const
     return connection;
 }
 
-void Database::verifyConnection() const
+void PostgresDatabase::verifyConnection() const
 {
     auto connection = connect();
     pqxx::nontransaction tx(*connection);

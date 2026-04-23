@@ -36,7 +36,7 @@ TEST_SUITE("fleet")
         const auto car = server.createCar(car_rental::CarClass::Business);
 
         CHECK_FALSE(car.id.empty());
-        CHECK(server.scalarInt("SELECT COUNT(*) FROM fleet_service.cars") == 1);
+        CHECK(server.countCars() == 1);
     }
 
     TEST_CASE("invalid vin is rejected")

@@ -1,7 +1,7 @@
 #include "car_rental/stores.h"
 
-#include "car_rental/database.h"
 #include "car_rental/errors.h"
+#include "car_rental/postgres_database.h"
 #include "car_rental/utils.h"
 
 #include <Poco/JSON/Object.h>
@@ -162,7 +162,7 @@ void insertOutboxEvent(pqxx::transaction_base& tx, const std::string& aggregateI
 class PostgresUserStore final : public UserStore
 {
 public:
-    explicit PostgresUserStore(const Database& database)
+    explicit PostgresUserStore(const PostgresDatabase& database)
         : database_(database)
     {
     }
@@ -386,13 +386,13 @@ private:
         return value;
     }
 
-    const Database& database_;
+    const PostgresDatabase& database_;
 };
 
 class PostgresFleetStore final : public FleetStore
 {
 public:
-    explicit PostgresFleetStore(const Database& database)
+    explicit PostgresFleetStore(const PostgresDatabase& database)
         : database_(database)
     {
     }
@@ -529,13 +529,13 @@ public:
     }
 
 private:
-    const Database& database_;
+    const PostgresDatabase& database_;
 };
 
 class PostgresRentalStore final : public RentalStore
 {
 public:
-    explicit PostgresRentalStore(const Database& database)
+    explicit PostgresRentalStore(const PostgresDatabase& database)
         : database_(database)
     {
     }
@@ -605,13 +605,13 @@ private:
         return rentals;
     }
 
-    const Database& database_;
+    const PostgresDatabase& database_;
 };
 
 class PostgresRentalWorkflowCoordinator final : public RentalWorkflowCoordinator
 {
 public:
-    explicit PostgresRentalWorkflowCoordinator(const Database& database)
+    explicit PostgresRentalWorkflowCoordinator(const PostgresDatabase& database)
         : database_(database)
     {
     }
@@ -771,27 +771,27 @@ public:
     }
 
 private:
-    const Database& database_;
+    const PostgresDatabase& database_;
 };
 
 } // namespace
 
-std::unique_ptr<UserStore> makePostgresUserStore(const Database& database)
+std::unique_ptr<UserStore> makePostgresUserStore(const PostgresDatabase& database)
 {
     return std::make_unique<PostgresUserStore>(database);
 }
 
-std::unique_ptr<FleetStore> makePostgresFleetStore(const Database& database)
+std::unique_ptr<FleetStore> makePostgresFleetStore(const PostgresDatabase& database)
 {
     return std::make_unique<PostgresFleetStore>(database);
 }
 
-std::unique_ptr<RentalStore> makePostgresRentalStore(const Database& database)
+std::unique_ptr<RentalStore> makePostgresRentalStore(const PostgresDatabase& database)
 {
     return std::make_unique<PostgresRentalStore>(database);
 }
 
-std::unique_ptr<RentalWorkflowCoordinator> makePostgresRentalWorkflowCoordinator(const Database& database)
+std::unique_ptr<RentalWorkflowCoordinator> makePostgresRentalWorkflowCoordinator(const PostgresDatabase& database)
 {
     return std::make_unique<PostgresRentalWorkflowCoordinator>(database);
 }

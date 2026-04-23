@@ -13,7 +13,7 @@
 - Seed-пользователь менеджера автопарка.
 - OpenAPI спецификация в [`../../openapi.yaml`](../../openapi.yaml).
 - Интеграционные HTTP-тесты.
-- Dockerfile и `docker-compose.yaml`.
+- Dockerfile и `docker-compose.yml`.
 
 ## Структура проекта
 - [`../../include/car_rental`](../../include/car_rental) — публичные заголовки, DTO, сервисные интерфейсы.

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "car_rental/models.h"
+#include "car_rental/mongo_database.h"
 #include "car_rental/server.h"
 #include "car_rental/security.h"
 
@@ -47,12 +48,15 @@ public:
     std::string managerToken() const;
     std::string makeTokenFor(const std::string& userId, car_rental::Role role, const std::string& login, long ttlSeconds = 3600) const;
 
-    int scalarInt(const std::string& sql) const;
-    std::string scalarText(const std::string& sql) const;
+    int countUsers() const;
+    int countCars() const;
+    int countOutboxEvents() const;
+    std::string carStatus(const std::string& carId) const;
 
     std::string uniqueLogin(const std::string& prefix = "customer") const;
     std::string uniqueVin() const;
     const car_rental::ServerConfig& config() const;
+    car_rental::StorageBackend backend() const;
 
 private:
     std::string stringify(const Poco::JSON::Object::Ptr& object) const;
@@ -61,5 +65,6 @@ private:
     car_rental::ServerConfig config_;
     std::string databaseName_;
     std::string adminDatabaseUrl_;
+    std::string mongoUrl_;
     std::unique_ptr<car_rental::ApiServer> server_;
 };

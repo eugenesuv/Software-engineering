@@ -1,6 +1,7 @@
 #pragma once
 
-#include "car_rental/database.h"
+#include "car_rental/mongo_database.h"
+#include "car_rental/postgres_database.h"
 #include "car_rental/security.h"
 #include "car_rental/services.h"
 #include "car_rental/stores.h"
@@ -14,11 +15,23 @@ class HTTPServer;
 
 namespace car_rental {
 
+enum class StorageBackend
+{
+    Postgres,
+    Mongo
+};
+
+std::string toString(StorageBackend backend);
+StorageBackend storageBackendFromString(const std::string& value);
+
 struct ServerConfig
 {
     std::string host{"127.0.0.1"};
     int port{8080};
+    StorageBackend dataBackend{StorageBackend::Postgres};
     std::string databaseUrl{"postgresql://postgres:postgres@127.0.0.1:5432/car_rental"};
+    std::string mongoUrl{"mongodb://127.0.0.1:27017/?replicaSet=rs0"};
+    std::string mongoDatabaseName{"car_rental"};
     std::string jwtSecret{"dev-secret-change-me"};
     long jwtTtlSeconds{3600};
     std::string managerLogin{"manager"};
@@ -38,7 +51,8 @@ public:
 
 private:
     ServerConfig config_;
-    std::unique_ptr<Database> database_;
+    std::unique_ptr<PostgresDatabase> postgresDatabase_;
+    std::unique_ptr<MongoDatabase> mongoDatabase_;
     std::unique_ptr<UserStore> userStore_;
     std::unique_ptr<FleetStore> fleetStore_;
     std::unique_ptr<RentalStore> rentalStore_;

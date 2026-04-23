@@ -9,7 +9,7 @@ Lab 03 переводит реализованный в Lab 02 API c `SQLite` н
 - [`../../data.sql`](../../data.sql) — тестовые данные.
 - [`../../queries.sql`](../../queries.sql) — SQL для всех операций варианта.
 - [`../../optimization.md`](../../optimization.md) — описание оптимизаций на русском языке и планы `EXPLAIN`.
-- [`../../Dockerfile`](../../Dockerfile), [`../../docker-compose.yaml`](../../docker-compose.yaml) — запуск API и PostgreSQL.
+- [`../../Dockerfile`](../../Dockerfile), [`../../docker-compose.yml`](../../docker-compose.yml) — запуск API; в текущем состоянии репозитория compose по умолчанию ориентирован на MongoDB lab04.
 
 ## Что изменено в коде
 - Публичный HTTP API сохранен без изменений.
@@ -99,7 +99,7 @@ ctest --test-dir ../../build --output-on-failure
 docker compose up --build
 ```
 
-`docker-compose.yaml` поднимает `postgres` с инициализацией через `schema.sql` и `data.sql`, а затем `api`, подключенный по `DATABASE_URL`.
+`docker-compose.yml` в текущем состоянии репозитория поднимает MongoDB-стек для lab04; сценарии lab03 по-прежнему доступны через локальный запуск PostgreSQL и `DATABASE_URL`.
 
 ## Партиционирование
 В текущей версии партиционирование только спроектировано:

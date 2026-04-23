@@ -1,0 +1,72 @@
+services:
+  mongo:
+    image: mongo:7
+    command:
+      - --replSet
+      - rs0
+      - --bind_ip_all
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  mongo-init:
+    image: mongo:7
+    depends_on:
+      mongo:
+        condition: service_healthy
+    volumes:
+      - ./validation.js:/scripts/validation.js:ro
+      - ./data.js:/scripts/data.js:ro
+    entrypoint:
+      - /bin/bash
+      - -lc
+      - |
+        set -euo pipefail
+        until mongosh --host mongo:27017 --quiet --eval 'db.runCommand({ ping: 1 }).ok' >/dev/null; do
+          sleep 2
+        done
+        mongosh --host mongo:27017 --quiet --eval 'try { rs.status().ok } catch (e) { rs.initiate({_id:"rs0",members:[{_id:0,host:"mongo:27017"}]}) }'
+        until mongosh --host mongo:27017 --quiet --eval 'db.hello().isWritablePrimary' | grep true >/dev/null; do
+          sleep 2
+        done
+        mongosh 'mongodb://mongo:27017/car_rental?replicaSet=rs0' --file /scripts/validation.js
+        mongosh 'mongodb://mongo:27017/car_rental?replicaSet=rs0' --file /scripts/data.js
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
+    environment:
+      DATA_BACKEND: mongo
+      MONGO_URL: mongodb://mongo:27017/?replicaSet=rs0
+      MONGO_DB_NAME: car_rental
+    ports:
+      - "8080:8080"
+    command:
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --data-backend
+      - mongo
+      - --mongo-url
+      - mongodb://mongo:27017/?replicaSet=rs0
+      - --mongo-db
+      - car_rental
+      - --jwt-secret
+      - docker-dev-secret
+      - --manager-password
+      - Manager123!
+
+volumes:
+  mongo_data:

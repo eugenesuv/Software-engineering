@@ -301,6 +301,8 @@ RentalDto RentalService::createRental(const AuthenticatedUser& principal, const 
         generateUuid(),
         request.userId,
         request.carId,
+        user,
+        car,
         request.startAt,
         request.endAt,
         priceTotal,

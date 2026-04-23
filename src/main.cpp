@@ -43,11 +43,29 @@ protected:
                               .argument("port")
                               .callback(Poco::Util::OptionCallback<ApiServerApp>(this, &ApiServerApp::handlePort)));
 
+        options.addOption(Poco::Util::Option("data-backend", "", "Storage backend: postgres or mongo.")
+                              .required(false)
+                              .repeatable(false)
+                              .argument("backend")
+                              .callback(Poco::Util::OptionCallback<ApiServerApp>(this, &ApiServerApp::handleBackend)));
+
         options.addOption(Poco::Util::Option("db-url", "", "PostgreSQL connection string.")
                               .required(false)
                               .repeatable(false)
                               .argument("url")
                               .callback(Poco::Util::OptionCallback<ApiServerApp>(this, &ApiServerApp::handleDatabaseUrl)));
+
+        options.addOption(Poco::Util::Option("mongo-url", "", "MongoDB connection string.")
+                              .required(false)
+                              .repeatable(false)
+                              .argument("url")
+                              .callback(Poco::Util::OptionCallback<ApiServerApp>(this, &ApiServerApp::handleMongoUrl)));
+
+        options.addOption(Poco::Util::Option("mongo-db", "", "MongoDB database name.")
+                              .required(false)
+                              .repeatable(false)
+                              .argument("name")
+                              .callback(Poco::Util::OptionCallback<ApiServerApp>(this, &ApiServerApp::handleMongoDatabase)));
 
         options.addOption(Poco::Util::Option("jwt-secret", "", "Secret used to sign JWT tokens.")
                               .required(false)
@@ -99,6 +117,11 @@ private:
         formatter.format(std::cout);
     }
 
+    void handleBackend(const std::string&, const std::string& value)
+    {
+        config_.dataBackend = car_rental::storageBackendFromString(value);
+    }
+
     void handleHost(const std::string&, const std::string& value)
     {
         config_.host = value;
@@ -112,6 +135,16 @@ private:
     void handleDatabaseUrl(const std::string&, const std::string& value)
     {
         config_.databaseUrl = value;
+    }
+
+    void handleMongoUrl(const std::string&, const std::string& value)
+    {
+        config_.mongoUrl = value;
+    }
+
+    void handleMongoDatabase(const std::string&, const std::string& value)
+    {
+        config_.mongoDatabaseName = value;
     }
 
     void handleJwtSecret(const std::string&, const std::string& value)
@@ -137,10 +170,25 @@ private:
     bool helpRequested_{false};
     car_rental::ServerConfig config_ = [] {
         car_rental::ServerConfig config;
+        if (const char* backend = std::getenv("DATA_BACKEND"))
+        {
+            if (*backend != '\0')
+                config.dataBackend = car_rental::storageBackendFromString(backend);
+        }
         if (const char* databaseUrl = std::getenv("DATABASE_URL"))
         {
             if (*databaseUrl != '\0')
                 config.databaseUrl = databaseUrl;
+        }
+        if (const char* mongoUrl = std::getenv("MONGO_URL"))
+        {
+            if (*mongoUrl != '\0')
+                config.mongoUrl = mongoUrl;
+        }
+        if (const char* mongoDatabaseName = std::getenv("MONGO_DB_NAME"))
+        {
+            if (*mongoDatabaseName != '\0')
+                config.mongoDatabaseName = mongoDatabaseName;
         }
         return config;
     }();

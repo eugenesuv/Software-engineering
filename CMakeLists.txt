@@ -10,9 +10,11 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(ENABLE_COVERAGE "Enable coverage flags for GCC/Clang builds" OFF)
 
 include(CTest)
+find_package(PkgConfig REQUIRED)
 
 find_package(Poco CONFIG REQUIRED COMPONENTS Foundation JSON Net Util)
 find_package(libpqxx CONFIG QUIET)
+pkg_check_modules(LIBMONGOC REQUIRED IMPORTED_TARGET libmongoc-1.0)
 
 if(TARGET libpqxx::pqxx)
     set(LIBPQXX_TARGET libpqxx::pqxx)
@@ -50,8 +52,10 @@ endif()
 add_library(car_rental_lib
     src/errors.cpp
     src/database.cpp
+    src/mongo_database.cpp
     src/security.cpp
     src/services.cpp
+    src/stores_mongo.cpp
     src/stores_postgres.cpp
     src/server.cpp
     src/utils.cpp
@@ -66,6 +70,7 @@ target_link_libraries(
         Poco::Net
         Poco::Util
         ${LIBPQXX_TARGET}
+        PkgConfig::LIBMONGOC
 )
 
 target_compile_features(car_rental_lib PUBLIC cxx_std_17)

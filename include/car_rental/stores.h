@@ -9,13 +9,16 @@
 
 namespace car_rental {
 
-class Database;
+class MongoDatabase;
+class PostgresDatabase;
 
 struct RentalWriteRequest
 {
     std::string id;
     std::string userId;
     std::string carId;
+    UserDto userSnapshot;
+    CarDto carSnapshot;
     std::string startAt;
     std::string endAt;
     double priceTotal{};
@@ -88,9 +91,14 @@ public:
     virtual RentalDto completeRental(const RentalCompletionRequest& request) const = 0;
 };
 
-std::unique_ptr<UserStore> makePostgresUserStore(const Database& database);
-std::unique_ptr<FleetStore> makePostgresFleetStore(const Database& database);
-std::unique_ptr<RentalStore> makePostgresRentalStore(const Database& database);
-std::unique_ptr<RentalWorkflowCoordinator> makePostgresRentalWorkflowCoordinator(const Database& database);
+std::unique_ptr<UserStore> makePostgresUserStore(const PostgresDatabase& database);
+std::unique_ptr<FleetStore> makePostgresFleetStore(const PostgresDatabase& database);
+std::unique_ptr<RentalStore> makePostgresRentalStore(const PostgresDatabase& database);
+std::unique_ptr<RentalWorkflowCoordinator> makePostgresRentalWorkflowCoordinator(const PostgresDatabase& database);
+
+std::unique_ptr<UserStore> makeMongoUserStore(const MongoDatabase& database);
+std::unique_ptr<FleetStore> makeMongoFleetStore(const MongoDatabase& database);
+std::unique_ptr<RentalStore> makeMongoRentalStore(const MongoDatabase& database);
+std::unique_ptr<RentalWorkflowCoordinator> makeMongoRentalWorkflowCoordinator(const MongoDatabase& database);
 
 } // namespace car_rental
