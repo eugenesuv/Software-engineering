@@ -1,6 +1,7 @@
 #pragma once
 
 #include "car_rental/mongo_database.h"
+#include "car_rental/performance.h"
 #include "car_rental/postgres_database.h"
 #include "car_rental/security.h"
 #include "car_rental/services.h"
@@ -36,6 +37,10 @@ struct ServerConfig
     long jwtTtlSeconds{3600};
     std::string managerLogin{"manager"};
     std::string managerPassword{"Manager123!"};
+    long availableCarsCacheTtlSeconds{30};
+    long classSearchCacheTtlSeconds{60};
+    int loginRateLimit{5};
+    long loginRateWindowSeconds{60};
 };
 
 class ApiServer
@@ -65,6 +70,8 @@ private:
     std::unique_ptr<AuthService> authService_;
     std::unique_ptr<FleetService> fleetService_;
     std::unique_ptr<RentalService> rentalService_;
+    std::unique_ptr<TtlJsonCache> fleetCache_;
+    std::unique_ptr<FixedWindowRateLimiter> loginRateLimiter_;
     std::unique_ptr<Poco::Net::HTTPServer> server_;
     std::uint16_t actualPort_{0};
 };

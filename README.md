@@ -7,6 +7,7 @@
 - [Lab 02: REST API на POCO C++ Libraries](labs/lab02/README.md)
 - [Lab 03: Проектирование и оптимизация реляционной БД](labs/lab03/README.md)
 - [Lab 04: Проектирование и работа с MongoDB](labs/lab04/README.md)
+- [Lab 05: Оптимизация производительности через кеширование и rate limiting](labs/lab05/README.md)
 
 ## Текущее состояние проекта
 - Архитектурный контекст и C4-модель: `workspace.dsl`, `docs`
@@ -15,6 +16,7 @@
 - Интеграционные тесты: `tests`
 - SQL-артефакты Lab 03: `schema.sql`, `data.sql`, `queries.sql`, `optimization.md`
 - MongoDB-артефакты Lab 04: `schema_design.md`, `data.js`, `queries.js`, `validation.js`
+- Performance-артефакты Lab 05: `performance_design.md`
 - Docker-артефакты: `Dockerfile`, `docker-compose.yml`
 - API умеет работать с backend'ами `postgres` и `mongo`
 
@@ -85,3 +87,4 @@ docker compose up --build
 - Lab 02: REST API, JWT, OpenAPI, тесты и Docker.
 - Lab 03: PostgreSQL-схема, данные, SQL-запросы, индексы и оптимизация.
 - Lab 04: MongoDB document model, validation, seed-данные, dual-backend API и MongoDB Docker stack.
+- Lab 05: in-memory cache, rate limiting, документация по производительности и тесты.

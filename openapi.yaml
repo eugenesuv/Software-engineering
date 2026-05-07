@@ -12,6 +12,32 @@ tags:
   - name: fleet
   - name: rentals
 components:
+  headers:
+    XCache:
+      description: Cache status for cacheable endpoints.
+      schema:
+        type: string
+        enum: [HIT, MISS]
+    XRateLimitLimit:
+      description: Maximum number of requests allowed in the current fixed window.
+      schema:
+        type: integer
+        example: 5
+    XRateLimitRemaining:
+      description: Number of requests remaining in the current fixed window.
+      schema:
+        type: integer
+        example: 4
+    XRateLimitReset:
+      description: Unix timestamp when the current fixed window resets.
+      schema:
+        type: integer
+        example: 1778160000
+    RetryAfter:
+      description: Seconds to wait before retrying after a rate limit violation.
+      schema:
+        type: integer
+        example: 42
   securitySchemes:
     bearerAuth:
       type: http
@@ -247,18 +273,54 @@ paths:
       responses:
         '200':
           description: JWT issued
+          headers:
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/XRateLimitLimit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/XRateLimitRemaining'
+            X-RateLimit-Reset:
+              $ref: '#/components/headers/XRateLimitReset'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/LoginResponse'
         '400':
           description: Validation error
+          headers:
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/XRateLimitLimit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/XRateLimitRemaining'
+            X-RateLimit-Reset:
+              $ref: '#/components/headers/XRateLimitReset'
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Invalid credentials
+          headers:
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/XRateLimitLimit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/XRateLimitRemaining'
+            X-RateLimit-Reset:
+              $ref: '#/components/headers/XRateLimitReset'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many login attempts
+          headers:
+            X-RateLimit-Limit:
+              $ref: '#/components/headers/XRateLimitLimit'
+            X-RateLimit-Remaining:
+              $ref: '#/components/headers/XRateLimitRemaining'
+            X-RateLimit-Reset:
+              $ref: '#/components/headers/XRateLimitReset'
+            Retry-After:
+              $ref: '#/components/headers/RetryAfter'
           content:
             application/json:
               schema:
@@ -388,6 +450,9 @@ paths:
       responses:
         '200':
           description: Available cars
+          headers:
+            X-Cache:
+              $ref: '#/components/headers/XCache'
           content:
             application/json:
               schema:
@@ -408,6 +473,9 @@ paths:
       responses:
         '200':
           description: Matching cars
+          headers:
+            X-Cache:
+              $ref: '#/components/headers/XCache'
           content:
             application/json:
               schema:

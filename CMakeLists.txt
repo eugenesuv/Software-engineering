@@ -14,7 +14,13 @@ find_package(PkgConfig REQUIRED)
 
 find_package(Poco CONFIG REQUIRED COMPONENTS Foundation JSON Net Util)
 find_package(libpqxx CONFIG QUIET)
-pkg_check_modules(LIBMONGOC REQUIRED IMPORTED_TARGET libmongoc-1.0)
+pkg_check_modules(LIBMONGOC1 IMPORTED_TARGET libmongoc-1.0)
+if(LIBMONGOC1_FOUND)
+    set(LIBMONGOC_TARGET PkgConfig::LIBMONGOC1)
+else()
+    pkg_check_modules(LIBMONGOC2 REQUIRED IMPORTED_TARGET mongoc2)
+    set(LIBMONGOC_TARGET PkgConfig::LIBMONGOC2)
+endif()
 
 if(TARGET libpqxx::pqxx)
     set(LIBPQXX_TARGET libpqxx::pqxx)
@@ -53,6 +59,7 @@ add_library(car_rental_lib
     src/errors.cpp
     src/database.cpp
     src/mongo_database.cpp
+    src/performance.cpp
     src/security.cpp
     src/services.cpp
     src/stores_mongo.cpp
@@ -70,7 +77,7 @@ target_link_libraries(
         Poco::Net
         Poco::Util
         ${LIBPQXX_TARGET}
-        PkgConfig::LIBMONGOC
+        ${LIBMONGOC_TARGET}
 )
 
 target_compile_features(car_rental_lib PUBLIC cxx_std_17)
@@ -91,6 +98,7 @@ if(BUILD_TESTING)
         tests/auth_tests.cpp
         tests/users_tests.cpp
         tests/fleet_tests.cpp
+        tests/performance_tests.cpp
         tests/rentals_tests.cpp
         tests/smoke_tests.cpp
     )

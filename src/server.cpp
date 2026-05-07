@@ -21,6 +21,7 @@
 #include <Poco/StreamCopier.h>
 #include <Poco/URI.h>
 
+#include <chrono>
 #include <memory>
 #include <stdexcept>
 #include <regex>
@@ -36,6 +37,12 @@ struct ApiDependencies
     UserService* users{nullptr};
     FleetService* fleet{nullptr};
     RentalService* rentals{nullptr};
+    TtlJsonCache* fleetCache{nullptr};
+    FixedWindowRateLimiter* loginRateLimiter{nullptr};
+    long availableCarsCacheTtlSeconds{30};
+    long classSearchCacheTtlSeconds{60};
+    int loginRateLimit{5};
+    long loginRateWindowSeconds{60};
 };
 
 StorageBackend storageBackendOrThrow(const std::string& value)
@@ -137,6 +144,22 @@ void sendJson(Poco::Net::HTTPServerResponse& response, Poco::Net::HTTPResponse::
     response.setChunkedTransferEncoding(false);
     std::ostream& output = response.send();
     Poco::JSON::Stringifier::stringify(array, output);
+}
+
+void sendJsonString(Poco::Net::HTTPServerResponse& response, Poco::Net::HTTPResponse::HTTPStatus status, const std::string& payload)
+{
+    response.setStatus(status);
+    response.setContentType("application/json");
+    response.setChunkedTransferEncoding(false);
+    std::ostream& output = response.send();
+    output << payload;
+}
+
+std::string stringifyJson(const Poco::JSON::Array::Ptr& array)
+{
+    std::ostringstream buffer;
+    Poco::JSON::Stringifier::stringify(array, buffer);
+    return buffer.str();
 }
 
 std::string readRequestBody(Poco::Net::HTTPServerRequest& request)
@@ -250,6 +273,31 @@ AuthenticatedUser requireAuthenticated(const Poco::Net::HTTPServerRequest& reque
     return dependencies.auth->authenticateAuthorizationHeader(request.get("Authorization", ""));
 }
 
+std::string rateLimitKey(const Poco::Net::HTTPServerRequest& request)
+{
+    return "login:" + request.clientAddress().host().toString();
+}
+
+long epochSeconds(std::chrono::system_clock::time_point timePoint)
+{
+    return std::chrono::duration_cast<std::chrono::seconds>(timePoint.time_since_epoch()).count();
+}
+
+void setRateLimitHeaders(Poco::Net::HTTPServerResponse& response, const RateLimitResult& result)
+{
+    response.set("X-RateLimit-Limit", std::to_string(result.limit));
+    response.set("X-RateLimit-Remaining", std::to_string(result.remaining));
+    response.set("X-RateLimit-Reset", std::to_string(epochSeconds(result.resetAt)));
+    if (!result.allowed)
+        response.set("Retry-After", std::to_string(result.retryAfterSeconds));
+}
+
+void invalidateFleetCache(const ApiDependencies& dependencies)
+{
+    if (dependencies.fleetCache)
+        dependencies.fleetCache->invalidatePrefix("cars:");
+}
+
 class ApiRequestHandler final : public Poco::Net::HTTPRequestHandler
 {
 public:
@@ -283,6 +331,21 @@ public:
 
             if (method == Poco::Net::HTTPRequest::HTTP_POST && path == "/auth/login")
             {
+                const RateLimitResult rateLimit = dependencies_.loginRateLimiter->allow(
+                    rateLimitKey(request),
+                    dependencies_.loginRateLimit,
+                    std::chrono::seconds(dependencies_.loginRateWindowSeconds));
+                setRateLimitHeaders(response, rateLimit);
+                if (!rateLimit.allowed)
+                {
+                    const ApiException exception(429, "rate_limit_exceeded", "Too many login attempts. Try again later.");
+                    sendJson(
+                        response,
+                        static_cast<Poco::Net::HTTPResponse::HTTPStatus>(exception.status()),
+                        errorJson(exception));
+                    return;
+                }
+
                 const LoginResponseDto loginResponse = dependencies_.auth->login(parseLoginRequest(parseBodyObject(request)));
                 sendJson(response, Poco::Net::HTTPResponse::HTTP_OK, toJson(loginResponse));
                 return;
@@ -311,14 +374,30 @@ public:
                     throw ApiException(403, "forbidden", "Only fleet manager can add cars.");
 
                 const CarDto car = dependencies_.fleet->addCar(parseCreateCarRequest(parseBodyObject(request)));
+                invalidateFleetCache(dependencies_);
                 sendJson(response, Poco::Net::HTTPResponse::HTTP_CREATED, toJson(car));
                 return;
             }
 
             if (method == Poco::Net::HTTPRequest::HTTP_GET && path == "/cars/available")
             {
+                const std::string cacheKey = "cars:available";
+                std::string cachedPayload;
+                if (dependencies_.fleetCache->get(cacheKey, cachedPayload))
+                {
+                    response.set("X-Cache", "HIT");
+                    sendJsonString(response, Poco::Net::HTTPResponse::HTTP_OK, cachedPayload);
+                    return;
+                }
+
                 const auto cars = dependencies_.fleet->listAvailable();
-                sendJson(response, Poco::Net::HTTPResponse::HTTP_OK, toArray(cars));
+                const std::string payload = stringifyJson(toArray(cars));
+                dependencies_.fleetCache->put(
+                    cacheKey,
+                    payload,
+                    std::chrono::seconds(dependencies_.availableCarsCacheTtlSeconds));
+                response.set("X-Cache", "MISS");
+                sendJsonString(response, Poco::Net::HTTPResponse::HTTP_OK, payload);
                 return;
             }
 
@@ -326,8 +405,25 @@ public:
             {
                 try
                 {
-                    const auto cars = dependencies_.fleet->searchByClass(carClassFromString(upperCopy(queryParam(uri, "class"))));
-                    sendJson(response, Poco::Net::HTTPResponse::HTTP_OK, toArray(cars));
+                    const std::string requestedClass = upperCopy(queryParam(uri, "class"));
+                    const CarClass carClass = carClassFromString(requestedClass);
+                    const std::string cacheKey = "cars:class:" + requestedClass;
+                    std::string cachedPayload;
+                    if (dependencies_.fleetCache->get(cacheKey, cachedPayload))
+                    {
+                        response.set("X-Cache", "HIT");
+                        sendJsonString(response, Poco::Net::HTTPResponse::HTTP_OK, cachedPayload);
+                        return;
+                    }
+
+                    const auto cars = dependencies_.fleet->searchByClass(carClass);
+                    const std::string payload = stringifyJson(toArray(cars));
+                    dependencies_.fleetCache->put(
+                        cacheKey,
+                        payload,
+                        std::chrono::seconds(dependencies_.classSearchCacheTtlSeconds));
+                    response.set("X-Cache", "MISS");
+                    sendJsonString(response, Poco::Net::HTTPResponse::HTTP_OK, payload);
                     return;
                 }
                 catch (const std::invalid_argument&)
@@ -340,6 +436,7 @@ public:
             {
                 const auto principal = requireAuthenticated(request, dependencies_);
                 const RentalDto rental = dependencies_.rentals->createRental(principal, parseCreateRentalRequest(parseBodyObject(request)));
+                invalidateFleetCache(dependencies_);
                 sendJson(response, Poco::Net::HTTPResponse::HTTP_CREATED, toJson(rental));
                 return;
             }
@@ -369,6 +466,7 @@ public:
             {
                 const auto principal = requireAuthenticated(request, dependencies_);
                 const RentalDto rental = dependencies_.rentals->completeRental(principal, match[1].str());
+                invalidateFleetCache(dependencies_);
                 sendJson(response, Poco::Net::HTTPResponse::HTTP_OK, toJson(rental));
                 return;
             }
@@ -474,6 +572,8 @@ ApiServer::ApiServer(ServerConfig config)
           *fleetService_,
           *licenseVerifier_,
           *paymentGateway_))
+    , fleetCache_(std::make_unique<TtlJsonCache>())
+    , loginRateLimiter_(std::make_unique<FixedWindowRateLimiter>())
 {
 }
 
@@ -503,7 +603,17 @@ void ApiServer::start()
     params->setMaxQueued(64);
     params->setMaxThreads(8);
 
-    ApiDependencies dependencies{authService_.get(), userService_.get(), fleetService_.get(), rentalService_.get()};
+    ApiDependencies dependencies{
+        authService_.get(),
+        userService_.get(),
+        fleetService_.get(),
+        rentalService_.get(),
+        fleetCache_.get(),
+        loginRateLimiter_.get(),
+        config_.availableCarsCacheTtlSeconds,
+        config_.classSearchCacheTtlSeconds,
+        config_.loginRateLimit,
+        config_.loginRateWindowSeconds};
     server_ = std::make_unique<Poco::Net::HTTPServer>(new ApiHandlerFactory(dependencies), socket, params);
     server_->start();
 }

@@ -278,7 +278,11 @@ HttpResult TestServer::request(const std::string& method, const std::string& pat
     std::ostringstream responseBody;
     Poco::StreamCopier::copyStream(responseStream, responseBody);
 
-    return HttpResult{response.getStatus(), responseBody.str(), response.getContentType()};
+    std::map<std::string, std::string> headers;
+    for (auto iterator = response.begin(); iterator != response.end(); ++iterator)
+        headers[iterator->first] = iterator->second;
+
+    return HttpResult{response.getStatus(), responseBody.str(), response.getContentType(), headers};
 }
 
 Poco::JSON::Object::Ptr TestServer::parseObject(const std::string& payload) const

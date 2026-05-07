@@ -39,6 +39,7 @@ COPY schema.sql /app/schema.sql
 COPY data.sql /app/data.sql
 COPY queries.sql /app/queries.sql
 COPY optimization.md /app/optimization.md
+COPY performance_design.md /app/performance_design.md
 COPY schema_design.md /app/schema_design.md
 COPY data.js /app/data.js
 COPY queries.js /app/queries.js

@@ -9,6 +9,7 @@
 #include <Poco/JSON/Object.h>
 
 #include <memory>
+#include <map>
 #include <string>
 
 struct HttpResult
@@ -16,6 +17,7 @@ struct HttpResult
     int status{};
     std::string body;
     std::string contentType;
+    std::map<std::string, std::string> headers;
 };
 
 struct RegisteredUserFixture
