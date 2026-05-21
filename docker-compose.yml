@@ -68,5 +68,57 @@ services:
       - --manager-password
       - Manager123!
 
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    profiles:
+      - lab06
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  lab06-producer:
+    profiles:
+      - lab06
+    build:
+      context: ./labs/lab06/event_service
+      dockerfile: Dockerfile
+    depends_on:
+      mongo-init:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      MONGO_URL: mongodb://mongo:27017/?replicaSet=rs0
+      MONGO_DB_NAME: car_rental
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/%2F
+    command:
+      - python
+      - producer.py
+    restart: "no"
+
+  lab06-consumer:
+    profiles:
+      - lab06
+    build:
+      context: ./labs/lab06/event_service
+      dockerfile: Dockerfile
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/%2F
+      CQRS_STATE_PATH: /state/read_model.json
+    volumes:
+      - lab06_consumer_state:/state
+    command:
+      - python
+      - consumer.py
+
 volumes:
   mongo_data:
+  lab06_consumer_state:
